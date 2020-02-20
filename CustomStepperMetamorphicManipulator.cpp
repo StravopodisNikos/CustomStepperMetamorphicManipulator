@@ -11,13 +11,14 @@
 using namespace std;
 
 // Constructor
-CustomStepperMetamorphicManipulator::CustomStepperMetamorphicManipulator(int stepID, int stepPin, int dirPin, int enblPin, int ledPin, int hallSwitchPin, int spr, int GEAR_FACTOR, int ft )
+CustomStepperMetamorphicManipulator::CustomStepperMetamorphicManipulator(int stepID, int stepPin, int dirPin, int enblPin, int ledPin, int hallSwitchPin, int lockPin, int spr, int GEAR_FACTOR, int ft )
 {
     pinMode(stepPin, OUTPUT);
     pinMode(dirPin, OUTPUT);
     pinMode(enblPin, OUTPUT);
     pinMode(ledPin, OUTPUT);          
     pinMode(hallSwitchPin, INPUT);
+    pinMode(lockPin, OUTPUT);
 
     digitalWrite(stepPin, LOW);
     digitalWrite(ledPin, LOW);
@@ -30,6 +31,7 @@ CustomStepperMetamorphicManipulator::CustomStepperMetamorphicManipulator(int ste
     _enblPin        = enblPin;
     _ledPin         = ledPin;
     _hallSwitchPin  = hallSwitchPin;
+    _lockPin        = lockPin;
 
     _spr            = spr;                                  // Steps per revolution [Found from driver dip switch configuration]
     _GEAR_FACTOR    = GEAR_FACTOR;                          // Gearbox Reduction of stepper motor [depends on Gearbox attached to motor]
@@ -295,7 +297,7 @@ bool CustomStepperMetamorphicManipulator::setStepperHomePosition(){
       CustomStepperMetamorphicManipulator::singleStepVarDelay(homing_stepping_delay);                  
   }
 
-  long currentAbsPos = 10;
+  long currentAbsPos = 0;
 
   Serial.print("[ Stepper ID: "); Serial.print(_stepID); Serial.println("] HOMING FINISHED ");
   
@@ -354,5 +356,57 @@ double CustomStepperMetamorphicManipulator::setStepperGoalPositionAssignedDurati
     // Calculate Velocity - Acceleration
     return hRelative;
 }
+
+// =========================================================================================================== //
+
+// lockMotor
+bool CustomStepperMetamorphicManipulator::lockMotor(bool positionReached){
+
+  /*
+  *  Locks Motor after Trajectory succesfully executed
+  */
+  bool StepperLocked;
+
+  if(positionReached)
+  {
+      digitalWrite(_lockPin, HIGH);                                                                 // locks when NO connected
+      Serial.print("[ Stepper ID: "); Serial.print(_stepID); Serial.println("] LOCKING SUCCESS ");
+      StepperLocked =  true;
+  }
+  else
+  {
+      Serial.print("[ Stepper ID: "); Serial.print(_stepID); Serial.println("] LOCKING FAIL ");
+      StepperLocked =  false;
+  }
+  
+  delay(1000);  
+return StepperLocked;
+} // END OF FUNCTION: lockMotor
+
+// =========================================================================================================== //
+
+// unlockMotor
+bool CustomStepperMetamorphicManipulator::unlockMotor(bool unlockStepper){
+
+  /*
+  *  Locks Motor after Trajectory succesfully executed
+  */
+  bool StepperUnLocked;
+
+  if(unlockStepper)
+  {
+      digitalWrite(_lockPin, LOW);                                                                 // unlocks when NO connected
+      Serial.print("[ Stepper ID: "); Serial.print(_stepID); Serial.println("] UNLOCKING SUCCESS ");
+      StepperUnLocked =  true;
+  }
+  else
+  {
+      Serial.print("[ Stepper ID: "); Serial.print(_stepID); Serial.println("] UNLOCKING FAIL ");
+      StepperUnLocked =  false;
+  }
+
+  delay(1000);
+return StepperUnLocked;
+} // END OF FUNCTION: unlockMotor
 
 // =========================================================================================================== //

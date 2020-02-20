@@ -26,8 +26,10 @@ class CustomStepperMetamorphicManipulator
         long currentMoveRel;
         int currentDirStatus;
         bool segmentExists;
+        bool positionReached;
+        bool unlockStepper;
 
-        CustomStepperMetamorphicManipulator(int stepID, int stepPin, int dirPin, int enblPin, int ledPin, int hallSwitchPin, int spr, int GEAR_FACTOR, int ft );
+        CustomStepperMetamorphicManipulator(int stepID, int stepPin, int dirPin, int enblPin, int ledPin, int hallSwitchPin, int lockPin, int spr, int GEAR_FACTOR, int ft );
         
         // User gives Texec, hAbs
 
@@ -49,8 +51,14 @@ class CustomStepperMetamorphicManipulator
         // Moves motor to home position - Hall Sensor Needed
         bool setStepperHomePosition();
 
-        // Executes Trajectory
+        // Executes Trajectory - sets value to PositionReached
         bool executeStepperTrapzProfile(bool segmentExists, vector<unsigned long> PROFILE_STEPS, double Texec, double delta_t);
+
+        // Locks Motor - sets value to ManipulatorMode = {true = Action, false = Metamorphosis}
+        bool lockMotor(bool positionReached);
+
+        // Unlocks Motor - sets value to ManipulatorMode = {true = Metamorphosis, false = Action}
+        bool unlockMotor(bool unlockStepper);
 
     private:
         int _stepID;
@@ -59,6 +67,7 @@ class CustomStepperMetamorphicManipulator
         int _enblPin;
         int _ledPin;
         int _hallSwitchPin;
+        int _lockPin;
         int _spr;
         int _GEAR_FACTOR;
         int _ft;

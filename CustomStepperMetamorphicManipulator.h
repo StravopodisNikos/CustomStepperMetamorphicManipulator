@@ -9,6 +9,7 @@
 #include "Arduino.h"
 #include <Streaming.h>
 #include <vector>
+#include <fstream>
 
 using namespace std;
 
@@ -18,6 +19,7 @@ extern bool return_function_state;
 extern vector<double> TrajAssignedDuration;
 extern vector<double> StpTrapzProfParams;
 extern vector<unsigned long> PROFILE_STEPS;
+extern vector<double> vector_for_trajectoryVelocity;
 
 class CustomStepperMetamorphicManipulator
 {
@@ -60,6 +62,8 @@ class CustomStepperMetamorphicManipulator
         // Unlocks Motor - sets value to ManipulatorMode = {true = Metamorphosis, false = Action}
         bool unlockMotor(bool unlockStepper);
 
+        void printDoubleVector2csvFile(vector<double> vector_for_trajectoryVelocity);
+
     private:
         int _stepID;
         int _stepPin;
@@ -74,8 +78,17 @@ class CustomStepperMetamorphicManipulator
         float _a;
         float _ag;
         float _accel_width;
-        
+        double _step_delay_time;
+        double _simultaneous_velocity;
+
         void singleStepVarDelay(unsigned long delayTime);
+
+        // Returns _simultaneous_velocity : This vaue is pushed back to a global storage vector
+        double trajectorySimultaneousVelocity(double _step_delay_time);
+
+        // Returns vector of Angular Acceleration Values during Trajectory execution
+        //vector<double> trajectoryAcceleration(double _simultaneous_velocity);
+
 };
 
  #endif

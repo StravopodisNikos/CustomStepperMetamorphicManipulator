@@ -4,8 +4,9 @@
   */
 
 #include "Arduino.h"
+#include <fstream>
 #include <vector>
-#include <Streaming.h>
+//#include <Streaming.h>
 #include "CustomStepperMetamorphicManipulator.h"
 
 using namespace std;
@@ -98,6 +99,11 @@ bool CustomStepperMetamorphicManipulator::executeStepperTrapzProfile(bool segmen
     const float RAMP_FACTOR       = 0.90;                        // Velocity Profile ramp slope factor
     const float ETDF              = 1.40;                        // Execution Time Deviation Factor (experimental calculation)
 
+    double _simultaneous_velocity;                               // Private variable to store simultaneous Angular Velocity
+    double _step_delay_time;
+
+    vector<double> vector_for_trajectoryVelocity;
+
     // Initialize counters for Profile Execution
     long StpPresentPosition = 0;													
     long accel_count = 0; 
@@ -115,7 +121,7 @@ bool CustomStepperMetamorphicManipulator::executeStepperTrapzProfile(bool segmen
     do
     {
     		// IX.aa. Move stepper using Trapz Vel Profile
-          StpPresentPosition++;
+          //StpPresentPosition++;
           // IV.b.1.I. Locate position in ramp
           if(segmentExists)                                                                                                     // Linear Segment exists
           {
@@ -148,6 +154,18 @@ bool CustomStepperMetamorphicManipulator::executeStepperTrapzProfile(bool segmen
 
           CustomStepperMetamorphicManipulator::singleStepVarDelay(new_delta_t_micros);                  // Executes Motor Step 
 
+          // Calculate Actual Angular Velocity
+          //_step_delay_time = new_delta_t;
+          //_simultaneous_velocity = CustomStepperMetamorphicManipulator::trajectorySimultaneousVelocity(_step_delay_time);  //works
+
+          //vector_for_trajectoryVelocity.push_back (  CustomStepperMetamorphicManipulator::trajectorySimultaneousVelocity(_step_delay_time) );
+
+          //vector_for_trajectoryVelocity.push_back( _simultaneous_velocity );  //works
+          //Serial.print("_simultaneous_velocity2 =  "); Serial.println(vector_for_trajectoryVelocity[StpPresentPosition]);
+
+            
+          // Calculate Actual Angular Acceleration
+          
           delta_t = new_delta_t;                                                                        // Changes Motor Step Delay
 
           time_duration = millis() - motor_movement_start;                                              // Calculates Stepper Motion Execution Time 
@@ -156,6 +174,7 @@ bool CustomStepperMetamorphicManipulator::executeStepperTrapzProfile(bool segmen
         //Serial.print("new_delta_t_micros = "); Serial.println(new_delta_t_micros);
         //Serial.print("StpPresentPosition = "); Serial.println(StpPresentPosition);
 
+    StpPresentPosition++;
     // loop RUNS for: running period shorter than dynamixel running AND number of stepps less than target      
     }while( ( float_time_duration < ( ETDF * Texec) ) && (abs(PROFILE_STEPS[0] - StpPresentPosition) != 0) );
 
@@ -408,5 +427,43 @@ bool CustomStepperMetamorphicManipulator::unlockMotor(bool unlockStepper){
   delay(1000);
 return StepperUnLocked;
 } // END OF FUNCTION: unlockMotor
+
+// =========================================================================================================== //
+
+double CustomStepperMetamorphicManipulator::trajectorySimultaneousVelocity(double _step_delay_time){
+
+    /*
+    *  Return instantaneous angular velocity of gearbox output shaft [rad/sec]
+    */
+
+    double currentVel;
+
+    currentVel = _ag  / _step_delay_time;
+
+    return currentVel;
+}
+
+// =========================================================================================================== //
+
+void CustomStepperMetamorphicManipulator::printDoubleVector2csvFile(vector<double> vector_for_trajectoryVelocity){
+
+    /*
+    *  UNDER DEVELOPMENT
+    */
+
+    ofstream trajectoryVelocity("trajectoryVelocity.csv");
+
+    trajectoryVelocity.open("trajectoryVelocity.csv");
+
+    for(int i = 0; i < vector_for_trajectoryVelocity.size(); ++i)
+    {
+        trajectoryVelocity << vector_for_trajectoryVelocity[i] << "\n";
+        Serial.print("_simultaneous_velocity3 =  "); Serial.println(vector_for_trajectoryVelocity[i]);
+    }
+  
+    trajectoryVelocity.close();
+
+    vector_for_trajectoryVelocity.clear();
+}
 
 // =========================================================================================================== //

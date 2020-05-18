@@ -6,8 +6,13 @@
 #ifndef CustomStepperMetamorphicManipulator_h
 #define CustomStepperMetamorphicManipulator_h
 
+// OPENCR EEPROM AREA ADDRESSES FOR STEPPER NEMA34[0~255]
+#define CP_JOINT1_STEPPER_EEPROM_ADDR    1     // float    
+#define CD_JOINT1_STEPPER_EEPROM_ADDR    10    // uint32_t
+#define VL_JOINT1_STEPPER_EEPROM_ADDR    20
+#define AL_JOINT1_STEPPER_EEPROM_ADDR    30
+
 #include "Arduino.h"
-#include <Streaming.h>
 #include <vector>
 #include <fstream>
 
@@ -21,18 +26,28 @@ extern vector<double> StpTrapzProfParams;
 extern vector<unsigned long> PROFILE_STEPS;
 extern vector<double> vector_for_trajectoryVelocity;
 
+extern unsigned long time_now_micros;
+extern unsigned long time_now_millis;
+
+extern unsigned long currentAbsPos;
+extern float currentAbsPos_float;
+extern long currentMoveRel;
+extern byte currentDirStatus;
+extern bool segmentExists;
+extern bool positionReached;
+extern bool unlockStepper;
+extern double VelocityLimitStp;
+extern double AccelerationLimitStp;
+
 class CustomStepperMetamorphicManipulator
 {
     public:
-        long currentAbsPos;
-        long currentMoveRel;
-        int currentDirStatus;
-        bool segmentExists;
-        bool positionReached;
-        bool unlockStepper;
 
-        CustomStepperMetamorphicManipulator(int stepID, int stepPin, int dirPin, int enblPin, int ledPin, int hallSwitchPin, int lockPin, int spr, int GEAR_FACTOR, int ft );
+        CustomStepperMetamorphicManipulator(int stepID, int stepPin, int dirPin, int enblPin, int ledPin, int hallHomePin, int limitSwitchMinPin, int limitSwitchMaxPin, int lockPin, int spr, int GEAR_FACTOR, int ft );
         
+        // read EEPROM settings for stepper Motion Profiles 
+        void readEEPROMsettings( byte * currentDirStatus, float * currentAbsPos_float, double * VelocityLimitStp, double * AccelerationLimitStp);
+
         // User gives Texec, hAbs
 
         // Returns hRel
@@ -50,8 +65,11 @@ class CustomStepperMetamorphicManipulator
             // Returns: delta_t
             double calculateInitialStepDelay(vector<double> StpTrapzProfParams);
 
-        // Moves motor to home position - Hall Sensor Needed
-        bool setStepperHomePosition();
+        // Moves motor to home position - Hall Sensor and Limit switches Needed
+        bool setStepperHomePositionSlow();
+        
+        // Moves motor to home position - Hall sensor only for evaluation, No Limit switches Needed - currentAbsPos is read from EEPROM
+        bool setStepperHomePositionFast(float * currentAbsPos_float, unsigned long * currentAbsPos,  byte *currentDirStatus);
 
         // Executes Trajectory - sets value to PositionReached
         bool executeStepperTrapzProfile(bool segmentExists, vector<unsigned long> PROFILE_STEPS, double Texec, double delta_t);
@@ -70,7 +88,9 @@ class CustomStepperMetamorphicManipulator
         int _dirPin;
         int _enblPin;
         int _ledPin;
-        int _hallSwitchPin;
+        int _hallHomePin;
+        int _limitSwitchMinPin;
+        int _limitSwitchMaxPin;
         int _lockPin;
         int _spr;
         int _GEAR_FACTOR;

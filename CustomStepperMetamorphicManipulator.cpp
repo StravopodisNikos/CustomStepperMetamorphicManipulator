@@ -4,21 +4,22 @@
   */
 
 #include "Arduino.h"
+#include <EEPROM.h>
 #include <fstream>
 #include <vector>
-//#include <Streaming.h>
+#include <printf.h>
 #include "CustomStepperMetamorphicManipulator.h"
 
 using namespace std;
 
 // Constructor
-CustomStepperMetamorphicManipulator::CustomStepperMetamorphicManipulator(int stepID, int stepPin, int dirPin, int enblPin, int ledPin, int hallSwitchPin, int lockPin, int spr, int GEAR_FACTOR, int ft )
+CustomStepperMetamorphicManipulator::CustomStepperMetamorphicManipulator(int stepID, int stepPin, int dirPin, int enblPin, int ledPin, int hallHomePin, int limitSwitchMinPin, int limitSwitchMaxPin, int lockPin, int spr, int GEAR_FACTOR, int ft )
 {
     pinMode(stepPin, OUTPUT);
     pinMode(dirPin, OUTPUT);
     pinMode(enblPin, OUTPUT);
     pinMode(ledPin, OUTPUT);          
-    pinMode(hallSwitchPin, INPUT);
+    pinMode(hallHomePin, INPUT);
     pinMode(lockPin, OUTPUT);
 
     digitalWrite(stepPin, LOW);
@@ -31,8 +32,10 @@ CustomStepperMetamorphicManipulator::CustomStepperMetamorphicManipulator(int ste
     _dirPin         = dirPin;
     _enblPin        = enblPin;
     _ledPin         = ledPin;
-    _hallSwitchPin  = hallSwitchPin;
+    _hallHomePin    = hallHomePin;
     _lockPin        = lockPin;
+    _limitSwitchMinPin = limitSwitchMinPin;
+    _limitSwitchMaxPin = limitSwitchMaxPin;
 
     _spr            = spr;                                  // Steps per revolution [Found from driver dip switch configuration]
     _GEAR_FACTOR    = GEAR_FACTOR;                          // Gearbox Reduction of stepper motor [depends on Gearbox attached to motor]
@@ -55,6 +58,31 @@ void CustomStepperMetamorphicManipulator::singleStepVarDelay(unsigned long delay
     while(micros() < time_now_micros + delayTime){}                   //wait approx. [μs]
     digitalWrite(_stepPin, LOW);
 } // END function singleStepVarDelay
+
+// =========================================================================================================== //
+
+void CustomStepperMetamorphicManipulator::readEEPROMsettings( byte * currentDirStatus, float * currentAbsPos_float, double * VelocityLimitStp, double * AccelerationLimitStp) {
+	/*
+	 *	This function is executed at setup() to initialize the global variables of Joint1 Stepper
+	 */
+  EEPROM.get(CP_JOINT1_STEPPER_EEPROM_ADDR, *currentAbsPos_float);
+
+	*currentDirStatus = EEPROM.read(CD_JOINT1_STEPPER_EEPROM_ADDR);
+
+	EEPROM.get(VL_JOINT1_STEPPER_EEPROM_ADDR, *VelocityLimitStp);    			
+
+	EEPROM.get(AL_JOINT1_STEPPER_EEPROM_ADDR, *AccelerationLimitStp);    			
+
+	// Print the results in serial monitor
+  Serial.print("[   JOINT1 STEPPER:"); Serial.print(_stepID); Serial.println("   ]   [READ EEPROM SETTINGS]   SUCCESS"); 
+	Serial.println("-----------------------------------------------------------------------------------------------");
+	Serial.print("[   JOINT1 STEPPER:"); Serial.print(_stepID); Serial.print("   ]   [  ABS_ANGLE_RAD ]    [   "); Serial.print(*currentAbsPos_float); Serial.println("     ]");
+	Serial.print("[   JOINT1 STEPPER:"); Serial.print(_stepID); Serial.print("   ]   [   VEL_LIMIT    ]    [   "); Serial.print(*VelocityLimitStp); Serial.println("  ]");
+	Serial.print("[   JOINT1 STEPPER:"); Serial.print(_stepID); Serial.print("   ]   [   ACCEL_LIMIT  ]    [   "); Serial.print(*AccelerationLimitStp ); Serial.println("     ]");
+	Serial.print("[   JOINT1 STEPPER:"); Serial.print(_stepID); Serial.print("   ]   [   DIR_STATUS   ]    [   "); Serial.print(*currentDirStatus); Serial.println("     ]");
+	Serial.println("-----------------------------------------------------------------------------------------------");
+
+} // END FUNCTION: readEEPROMsettingsSlave
 
 // =========================================================================================================== //
 
@@ -302,21 +330,88 @@ return c0;
 
 // =========================================================================================================== //
 
-// setStepperHomePosition
-bool CustomStepperMetamorphicManipulator::setStepperHomePosition(){
+// setStepperHomePositionSlow
+bool CustomStepperMetamorphicManipulator::setStepperHomePositionSlow(){
 
-  unsigned long homing_stepping_delay = 250;
+  unsigned long homing_stepping_delay = 500;
 
   Serial.print("[ Stepper ID: "); Serial.print(_stepID); Serial.println("] HOMING ... ");
   
   digitalWrite(_ledPin, HIGH);                                                                          
   
-  while( (digitalRead(_hallSwitchPin) == 0 ) )
-  {                                                                        
+  while( (digitalRead(_hallHomePin) == 0 ) )
+  {   
+      //move motor                                                                     
       CustomStepperMetamorphicManipulator::singleStepVarDelay(homing_stepping_delay);                  
+
+      //either MIN or MAX limit switches triggered
+      if( (digitalRead(_limitSwitchMinPin) == HIGH) || (digitalRead(_limitSwitchMaxPin) == HIGH) )
+      {
+          // Change DIR Pin status
+          digitalWrite(_dirPin, !currentDirStatus);
+      }
   }
 
-  long currentAbsPos = 0;
+  // sets global variable to new position(HOME) value
+  long currentAbsPos = 0; 
+
+  Serial.print("[ Stepper ID: "); Serial.print(_stepID); Serial.println("] HOMING FINISHED ");
+  
+  digitalWrite(_ledPin, LOW);                        
+
+return true;
+} // END OF FUNCTION
+
+// =========================================================================================================== //
+
+// setStepperHomePositionFast
+bool CustomStepperMetamorphicManipulator::setStepperHomePositionFast(float * currentAbsPos_float, unsigned long * currentAbsPos, byte * currentDirStatus){
+
+  unsigned long homing_stepping_delay = 500;                                // micros
+
+  // 1.Read currentAbsPos_float and currentDirStatus from EEPROM
+  
+  //float currentAbsPos_float = 0.00f;
+
+  EEPROM.get(CP_JOINT1_STEPPER_EEPROM_ADDR, *currentAbsPos_float);    			// @setup OR after every Action Task finishes: float f = 123.456f; EEPROM.put(eeAddress, f);
+  *currentAbsPos = abs( 	round( *currentAbsPos_float / _ag)    );
+  *currentDirStatus = EEPROM.read(CD_JOINT1_STEPPER_EEPROM_ADDR);
+  
+  // 2.Calculate relative steps
+  // Relative steps for homing is the absolute number of steps calculated
+
+  // 3.  Define direction of motion
+  if ( *currentAbsPos_float >= 0)
+  {
+    *currentDirStatus = LOW;						// move CCW
+  }
+  else
+  {
+    *currentDirStatus = HIGH;						// move CW
+  }
+  
+  digitalWrite(_dirPin, *currentDirStatus);
+
+  // 4. execute homing
+  Serial.print("[ Stepper ID: "); Serial.print(_stepID); Serial.println("] HOMING ... ");
+  
+  digitalWrite(_ledPin, HIGH);                                                                          
+  
+  int motor_step = 0;
+  // steps motor for pre-calculated number of steps and for the period that hall pin is not triggered
+  while( (motor_step <= *currentAbsPos) && (digitalRead(_hallHomePin) == 0 )){
+          
+		  time_now_micros = micros();
+
+			digitalWrite(_stepPin, HIGH);
+    	while(micros() < time_now_micros + homing_stepping_delay){}          //wait approx. [μs]
+    	digitalWrite(_stepPin, LOW);
+
+      motor_step++;
+  }
+
+  // 5. sets global variable to new position(HOME) value
+  *currentAbsPos = 0; 
 
   Serial.print("[ Stepper ID: "); Serial.print(_stepID); Serial.println("] HOMING FINISHED ");
   
@@ -344,7 +439,7 @@ double CustomStepperMetamorphicManipulator::setStepperGoalPositionAssignedDurati
 
   long inputAbsPos = round( hAbs / _ag);
 
-  int previousDirStatus = currentDirStatus;
+  byte previousDirStatus = currentDirStatus;
   long previousMoveRel  = currentMoveRel; 
   long previousAbsPos   = currentAbsPos;
   

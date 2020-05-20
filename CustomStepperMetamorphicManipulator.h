@@ -7,10 +7,10 @@
 #define CustomStepperMetamorphicManipulator_h
 
 // OPENCR EEPROM AREA ADDRESSES FOR STEPPER NEMA34[0~255]
-#define CP_JOINT1_STEPPER_EEPROM_ADDR    1     // float    
-#define CD_JOINT1_STEPPER_EEPROM_ADDR    10    // uint32_t
-#define VL_JOINT1_STEPPER_EEPROM_ADDR    20
-#define AL_JOINT1_STEPPER_EEPROM_ADDR    30
+#define CP_JOINT1_STEPPER_EEPROM_ADDR    1      // float    
+#define CD_JOINT1_STEPPER_EEPROM_ADDR    10     // uint32_t
+#define VL_JOINT1_STEPPER_EEPROM_ADDR    20     // double
+#define AL_JOINT1_STEPPER_EEPROM_ADDR    30     // double    
 
 #include "Arduino.h"
 #include <vector>
@@ -30,7 +30,7 @@ extern unsigned long time_now_micros;
 extern unsigned long time_now_millis;
 
 extern unsigned long currentAbsPos;
-extern float currentAbsPos_float;
+extern double currentAbsPos_double;
 extern long currentMoveRel;
 extern byte currentDirStatus;
 extern bool segmentExists;
@@ -46,7 +46,8 @@ class CustomStepperMetamorphicManipulator
         CustomStepperMetamorphicManipulator(int stepID, int stepPin, int dirPin, int enblPin, int ledPin, int hallHomePin, int limitSwitchMinPin, int limitSwitchMaxPin, int lockPin, int spr, int GEAR_FACTOR, int ft );
         
         // read EEPROM settings for stepper Motion Profiles 
-        void readEEPROMsettings( byte * currentDirStatus, float * currentAbsPos_float, double * VelocityLimitStp, double * AccelerationLimitStp);
+        void read_STP_EEPROM_settings( byte * currentDirStatus, double * currentAbsPos_double, double * VelocityLimitStp, double * AccelerationLimitStp);
+        void save_STP_EEPROM_settings( byte * currentDirStatus, double * currentAbsPos_double, double * VelocityLimitStp, double * AccelerationLimitStp);
 
         // User gives Texec, hAbs
 
@@ -69,7 +70,7 @@ class CustomStepperMetamorphicManipulator
         bool setStepperHomePositionSlow();
         
         // Moves motor to home position - Hall sensor only for evaluation, No Limit switches Needed - currentAbsPos is read from EEPROM
-        bool setStepperHomePositionFast(float * currentAbsPos_float, unsigned long * currentAbsPos,  byte *currentDirStatus);
+        bool setStepperHomePositionFast(double * currentAbsPos_double, unsigned long * currentAbsPos,  byte *currentDirStatus);
 
         // Executes Trajectory - sets value to PositionReached
         bool executeStepperTrapzProfile(bool segmentExists, vector<unsigned long> PROFILE_STEPS, double Texec, double delta_t);

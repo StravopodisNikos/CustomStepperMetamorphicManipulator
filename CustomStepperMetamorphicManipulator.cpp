@@ -61,11 +61,11 @@ void CustomStepperMetamorphicManipulator::singleStepVarDelay(unsigned long delay
 
 // =========================================================================================================== //
 
-void CustomStepperMetamorphicManipulator::readEEPROMsettings( byte * currentDirStatus, float * currentAbsPos_float, double * VelocityLimitStp, double * AccelerationLimitStp) {
+void CustomStepperMetamorphicManipulator::read_STP_EEPROM_settings( byte * currentDirStatus, double * currentAbsPos_double, double * VelocityLimitStp, double * AccelerationLimitStp) {
 	/*
-	 *	This function is executed at setup() to initialize the global variables of Joint1 Stepper
+	 *	This function is executed at setup() to read form EEPROM and Initialize the global variables of Joint1 Stepper
 	 */
-  EEPROM.get(CP_JOINT1_STEPPER_EEPROM_ADDR, *currentAbsPos_float);
+  EEPROM.get(CP_JOINT1_STEPPER_EEPROM_ADDR, *currentAbsPos_double);
 
 	*currentDirStatus = EEPROM.read(CD_JOINT1_STEPPER_EEPROM_ADDR);
 
@@ -73,16 +73,26 @@ void CustomStepperMetamorphicManipulator::readEEPROMsettings( byte * currentDirS
 
 	EEPROM.get(AL_JOINT1_STEPPER_EEPROM_ADDR, *AccelerationLimitStp);    			
 
-	// Print the results in serial monitor
-  Serial.print("[   JOINT1 STEPPER:"); Serial.print(_stepID); Serial.println("   ]   [READ EEPROM SETTINGS]   SUCCESS"); 
-	Serial.println("-----------------------------------------------------------------------------------------------");
-	Serial.print("[   JOINT1 STEPPER:"); Serial.print(_stepID); Serial.print("   ]   [  ABS_ANGLE_RAD ]    [   "); Serial.print(*currentAbsPos_float); Serial.println("     ]");
-	Serial.print("[   JOINT1 STEPPER:"); Serial.print(_stepID); Serial.print("   ]   [   VEL_LIMIT    ]    [   "); Serial.print(*VelocityLimitStp); Serial.println("  ]");
-	Serial.print("[   JOINT1 STEPPER:"); Serial.print(_stepID); Serial.print("   ]   [   ACCEL_LIMIT  ]    [   "); Serial.print(*AccelerationLimitStp ); Serial.println("     ]");
-	Serial.print("[   JOINT1 STEPPER:"); Serial.print(_stepID); Serial.print("   ]   [   DIR_STATUS   ]    [   "); Serial.print(*currentDirStatus); Serial.println("     ]");
-	Serial.println("-----------------------------------------------------------------------------------------------");
+} // END FUNCTION: readEEPROMsettings
 
-} // END FUNCTION: readEEPROMsettingsSlave
+void CustomStepperMetamorphicManipulator::save_STP_EEPROM_settings(byte * currentDirStatus, double * currentAbsPos_double, double * VelocityLimitStp, double * AccelerationLimitStp)
+{
+	/*
+	 *	Executed before exit setup\action loops - NEVER INSIDE LOOP
+	 */
+
+		// 1. Save the dirPin status only if value has changed
+		EEPROM.update(CD_JOINT1_STEPPER_EEPROM_ADDR, *currentDirStatus);
+
+		// 2. Save current absolute position in which stepper motor finished job
+		EEPROM.put(CP_JOINT1_STEPPER_EEPROM_ADDR, *currentAbsPos_double);
+
+		// 3. Save stepper Velocity/Acceleration Limits
+		EEPROM.put(VL_JOINT1_STEPPER_EEPROM_ADDR, *VelocityLimitStp);
+
+		EEPROM.put(AL_JOINT1_STEPPER_EEPROM_ADDR, *AccelerationLimitStp);
+
+} // END FUNCTION: saveEEPROMsettings
 
 // =========================================================================================================== //
 
@@ -365,23 +375,23 @@ return true;
 // =========================================================================================================== //
 
 // setStepperHomePositionFast
-bool CustomStepperMetamorphicManipulator::setStepperHomePositionFast(float * currentAbsPos_float, unsigned long * currentAbsPos, byte * currentDirStatus){
+bool CustomStepperMetamorphicManipulator::setStepperHomePositionFast(double * currentAbsPos_double, unsigned long * currentAbsPos, byte * currentDirStatus){
 
   unsigned long homing_stepping_delay = 500;                                // micros
 
-  // 1.Read currentAbsPos_float and currentDirStatus from EEPROM
+  // 1.Read currentAbsPos_double and currentDirStatus from EEPROM
   
-  //float currentAbsPos_float = 0.00f;
+  //float currentAbsPos_double = 0.00f;
 
-  EEPROM.get(CP_JOINT1_STEPPER_EEPROM_ADDR, *currentAbsPos_float);    			// @setup OR after every Action Task finishes: float f = 123.456f; EEPROM.put(eeAddress, f);
-  *currentAbsPos = abs( 	round( *currentAbsPos_float / _ag)    );
+  EEPROM.get(CP_JOINT1_STEPPER_EEPROM_ADDR, *currentAbsPos_double);    			// @setup OR after every Action Task finishes: float f = 123.456f; EEPROM.put(eeAddress, f);
+  *currentAbsPos = abs( 	round( *currentAbsPos_double / _ag)    );
   *currentDirStatus = EEPROM.read(CD_JOINT1_STEPPER_EEPROM_ADDR);
   
   // 2.Calculate relative steps
   // Relative steps for homing is the absolute number of steps calculated
 
   // 3.  Define direction of motion
-  if ( *currentAbsPos_float >= 0)
+  if ( *currentAbsPos_double >= 0)
   {
     *currentDirStatus = LOW;						// move CCW
   }

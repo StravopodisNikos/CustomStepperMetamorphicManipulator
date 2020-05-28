@@ -61,7 +61,8 @@ void CustomStepperMetamorphicManipulator::singleStepVarDelay(unsigned long delay
 
 // =========================================================================================================== //
 
-void CustomStepperMetamorphicManipulator::read_STP_EEPROM_settings( byte * currentDirStatus, double * currentAbsPos_double, double * VelocityLimitStp, double * AccelerationLimitStp) {
+void CustomStepperMetamorphicManipulator::read_STP_EEPROM_settings( byte * currentDirStatus, double * currentAbsPos_double, double * VelocityLimitStp, double * AccelerationLimitStp, double * MaxPosLimitStp)
+{
 	/*
 	 *	This function is executed at setup() to read form EEPROM and Initialize the global variables of Joint1 Stepper
 	 */
@@ -73,9 +74,11 @@ void CustomStepperMetamorphicManipulator::read_STP_EEPROM_settings( byte * curre
 
 	EEPROM.get(AL_JOINT1_STEPPER_EEPROM_ADDR, *AccelerationLimitStp);    			
 
+  EEPROM.get(MAX_POS_JOINT1_STEPPER_EEPROM_ADDR, *MaxPosLimitStp); 
+
 } // END FUNCTION: readEEPROMsettings
 
-void CustomStepperMetamorphicManipulator::save_STP_EEPROM_settings(byte * currentDirStatus, double * currentAbsPos_double, double * VelocityLimitStp, double * AccelerationLimitStp)
+void CustomStepperMetamorphicManipulator::save_STP_EEPROM_settings(byte * currentDirStatus, double * currentAbsPos_double, double * VelocityLimitStp, double * AccelerationLimitStp, double * MaxPosLimitStp)
 {
 	/*
 	 *	Executed before exit setup\action loops - NEVER INSIDE LOOP
@@ -92,16 +95,17 @@ void CustomStepperMetamorphicManipulator::save_STP_EEPROM_settings(byte * curren
 
 		EEPROM.put(AL_JOINT1_STEPPER_EEPROM_ADDR, *AccelerationLimitStp);
 
+    // 4. Save Joint1 Limit Angle
+    EEPROM.put(MAX_POS_JOINT1_STEPPER_EEPROM_ADDR, *MaxPosLimitStp);
+
 } // END FUNCTION: saveEEPROMsettings
 
 // =========================================================================================================== //
 
 // returnTrajAssignedDurationProperties
-vector<double> CustomStepperMetamorphicManipulator::returnTrajAssignedDurationProperties(double Texec, double hRel) {
+vector<double> CustomStepperMetamorphicManipulator::returnTrajAssignedDurationProperties(double Texec, double hRel, double * storage_array_for_TrajAssignedDuration, int storage_array_for_TrajAssignedDuration_size ) {
 
   // Define return vector
-  double storage_array_for_TrajAssignedDuration[5];
-
   vector<double> TrajAssignedDuration;
 
 	// Pre - determine the width of acceleration phase
@@ -113,11 +117,11 @@ vector<double> CustomStepperMetamorphicManipulator::returnTrajAssignedDurationPr
 	double Amax = abs( hRel / ( _accel_width * ( 1 - _accel_width) * pow(Texec,2.0) ) );
  	Serial.print("Amax = "); Serial.println(Amax,6);
   
-  storage_array_for_TrajAssignedDuration[0] = hRel;
-  storage_array_for_TrajAssignedDuration[1] = Texec;
-  storage_array_for_TrajAssignedDuration[2] = Ta;
-  storage_array_for_TrajAssignedDuration[3] = Vmax;
-  storage_array_for_TrajAssignedDuration[4] = Amax;
+  storage_array_for_TrajAssignedDuration[storage_array_for_TrajAssignedDuration_size-5] = hRel;
+  storage_array_for_TrajAssignedDuration[storage_array_for_TrajAssignedDuration_size-4] = Texec;
+  storage_array_for_TrajAssignedDuration[storage_array_for_TrajAssignedDuration_size-3] = Ta;
+  storage_array_for_TrajAssignedDuration[storage_array_for_TrajAssignedDuration_size-2] = Vmax;
+  storage_array_for_TrajAssignedDuration[storage_array_for_TrajAssignedDuration_size-1] = Amax;
 
   TrajAssignedDuration.assign(storage_array_for_TrajAssignedDuration, storage_array_for_TrajAssignedDuration+5);
 
@@ -127,7 +131,8 @@ vector<double> CustomStepperMetamorphicManipulator::returnTrajAssignedDurationPr
 // =========================================================================================================== //
 
 // executeStepperTrapzProfile
-bool CustomStepperMetamorphicManipulator::executeStepperTrapzProfile(bool segmentExists, vector<unsigned long> PROFILE_STEPS, double Texec, double delta_t){
+//bool CustomStepperMetamorphicManipulator::executeStepperTrapzProfile(bool segmentExists, vector<unsigned long> PROFILE_STEPS, double Texec, double delta_t){
+bool CustomStepperMetamorphicManipulator::executeStepperTrapzProfile(unsigned long * storage_array_for_PROFILE_STEPS, int storage_array_for_PROFILE_STEPS_size, bool segmentExists,  double Texec,  double delta_t){
 
 	/*
 	 *  Runs Stepper for predefined angle with Trapezoidal Velocity Profile
@@ -146,7 +151,7 @@ bool CustomStepperMetamorphicManipulator::executeStepperTrapzProfile(bool segmen
     long StpPresentPosition = 0;													
     long accel_count = 0; 
     long ctVel_count = 0;
-    long decel_count = -PROFILE_STEPS[3]; 
+    long decel_count = -storage_array_for_PROFILE_STEPS[3]; 
 
     // Initialize variable for timing/derivative calculations
     unsigned long time_duration;
@@ -163,10 +168,10 @@ bool CustomStepperMetamorphicManipulator::executeStepperTrapzProfile(bool segmen
           // IV.b.1.I. Locate position in ramp
           if(segmentExists)                                                                                                     // Linear Segment exists
           {
-                if(StpPresentPosition < PROFILE_STEPS[1]){
+                if(StpPresentPosition < storage_array_for_PROFILE_STEPS[1]){
                   accel_count++;                                                                                                // Acceleration Phase: delta_t -> minimizes
                   new_delta_t =  delta_t - RAMP_FACTOR * ( (2*delta_t+rest)/(4*accel_count+1) );                                // c_n [sec]
-                }else if( (StpPresentPosition > PROFILE_STEPS[1]) && (StpPresentPosition < PROFILE_STEPS[1]+PROFILE_STEPS[2]) ){// Linear Segment: delta_t -> constant
+                }else if( (StpPresentPosition > storage_array_for_PROFILE_STEPS[1]) && (StpPresentPosition < storage_array_for_PROFILE_STEPS[1]+storage_array_for_PROFILE_STEPS[2]) ){// Linear Segment: delta_t -> constant
                   ctVel_count++;
                   new_delta_t = delta_t;  
                 }
@@ -177,7 +182,7 @@ bool CustomStepperMetamorphicManipulator::executeStepperTrapzProfile(bool segmen
           }
           else
           {                                                                                             // Linear Segment doesn't exist
-                if(StpPresentPosition < PROFILE_STEPS[1])                                               // Acceleration Phase: delta_t -> minimizes
+                if(StpPresentPosition < storage_array_for_PROFILE_STEPS[1])                                               // Acceleration Phase: delta_t -> minimizes
                 {
                   accel_count++;
                   new_delta_t = delta_t - RAMP_FACTOR * ((2*delta_t+rest)/(4*accel_count+1) );          // c_n [sec]
@@ -233,12 +238,13 @@ else
 // =========================================================================================================== //
 
 // segmentExists_TrapzVelProfile
-bool CustomStepperMetamorphicManipulator::segmentExists_TrapzVelProfile(vector<double> StpTrapzProfParams){
+//bool CustomStepperMetamorphicManipulator::segmentExists_TrapzVelProfile(vector<double> StpTrapzProfParams){
+bool CustomStepperMetamorphicManipulator::segmentExists_TrapzVelProfile(double * storage_array_for_TrajAssignedDuration, int storage_array_for_TrajAssignedDuration_size){
 
   bool segmentExists;
-  float h_cond = pow(StpTrapzProfParams[3],2.0) / StpTrapzProfParams[4];				        // Condition factor for linear segment existence in Trapezoidal Velocity Profile
+  float h_cond = pow(storage_array_for_TrajAssignedDuration[storage_array_for_TrajAssignedDuration_size-2],2.0) / storage_array_for_TrajAssignedDuration[storage_array_for_TrajAssignedDuration_size-1];				        // Condition factor for linear segment existence in Trapezoidal Velocity Profile
 
-  if(StpTrapzProfParams[0] >= h_cond)
+  if(storage_array_for_TrajAssignedDuration[0] >= h_cond)
   {
       Serial.println("Trapezoidal Profile!"); 
       segmentExists = true;
@@ -255,9 +261,9 @@ bool CustomStepperMetamorphicManipulator::segmentExists_TrapzVelProfile(vector<d
 // =========================================================================================================== //
 
 // returnTrapzVelProfileSteps
-vector<unsigned long> CustomStepperMetamorphicManipulator::returnTrapzVelProfileSteps(vector<double> StpTrapzProfParams, bool segmentExists){
+//vector<unsigned long> CustomStepperMetamorphicManipulator::returnTrapzVelProfileSteps(vector<double> StpTrapzProfParams, bool segmentExists){
+vector<unsigned long> CustomStepperMetamorphicManipulator::returnTrapzVelProfileSteps(double * storage_array_for_TrajAssignedDuration, int storage_array_for_TrajAssignedDuration_size, unsigned long * storage_array_for_PROFILE_STEPS, int storage_array_for_PROFILE_STEPS_size, bool segmentExists){
 
-  unsigned long storage_array_for_PROFILE_STEPS[4];
   vector<unsigned long> PROFILE_STEPS; 
 
   float h_accel;
@@ -266,14 +272,14 @@ vector<unsigned long> CustomStepperMetamorphicManipulator::returnTrapzVelProfile
   unsigned long nmov_linseg;
   unsigned long h_accel_step;
   
-  unsigned long h_step = round( StpTrapzProfParams[0] / _ag );                          // Calculate displacement in [steps]
+  unsigned long h_step = round( storage_array_for_TrajAssignedDuration[storage_array_for_TrajAssignedDuration_size-5] / _ag );                          // Calculate displacement in [steps]
 
   if(segmentExists)
   {
       // Determine Profile Step Variables based on Real Time Profiles vs Melchiorri
-      h_accel   = 0.5 * StpTrapzProfParams[4] * pow(StpTrapzProfParams[2],2.0);
+      h_accel   = 0.5 * storage_array_for_TrajAssignedDuration[storage_array_for_TrajAssignedDuration_size-1] * pow(storage_array_for_TrajAssignedDuration[storage_array_for_TrajAssignedDuration_size-3],2.0);
       
-      float h_lin_seg = StpTrapzProfParams[4] * _accel_width * pow(StpTrapzProfParams[1],2.0) * ( 1 - 2 * _accel_width);
+      float h_lin_seg = storage_array_for_TrajAssignedDuration[storage_array_for_TrajAssignedDuration_size-1] * _accel_width * pow(storage_array_for_TrajAssignedDuration[storage_array_for_TrajAssignedDuration_size-4],2.0) * ( 1 - 2 * _accel_width);
       
       h_accel_step = round( h_accel / _ag );
       unsigned long h_lin_seg_step = round( h_lin_seg / _ag );
@@ -285,13 +291,13 @@ vector<unsigned long> CustomStepperMetamorphicManipulator::returnTrapzVelProfile
   else
   {
       // In this case: p2p is executed for Texec with the recalculated Vmax!
-      float nTa = sqrt(StpTrapzProfParams[0]/StpTrapzProfParams[4]);
+      float nTa = sqrt(storage_array_for_TrajAssignedDuration[0]/storage_array_for_TrajAssignedDuration[storage_array_for_TrajAssignedDuration_size-1]);
 
-      float nVmax = StpTrapzProfParams[4] * nTa;
+      float nVmax = storage_array_for_TrajAssignedDuration[storage_array_for_TrajAssignedDuration_size-1] * nTa;
 
       Serial.print("New maximum Velocity:"); Serial.print(nVmax,6); Serial.println("[rad/sec]");
 
-      h_accel  = 0.5 * StpTrapzProfParams[4] * pow(nTa,2.0);
+      h_accel  = 0.5 * storage_array_for_TrajAssignedDuration[storage_array_for_TrajAssignedDuration_size-1] * pow(nTa,2.0);
       h_accel_step = round( h_accel / _ag );
 
       nmov_Ta      = h_accel_step;
@@ -319,18 +325,19 @@ vector<unsigned long> CustomStepperMetamorphicManipulator::returnTrapzVelProfile
 // =========================================================================================================== //
 
 // calculateInitialStepDelay
-double CustomStepperMetamorphicManipulator::calculateInitialStepDelay(vector<double> StpTrapzProfParams) {
+//double CustomStepperMetamorphicManipulator::calculateInitialStepDelay(vector<double> StpTrapzProfParams) {
+double CustomStepperMetamorphicManipulator::calculateInitialStepDelay(double * storage_array_for_TrajAssignedDuration, int storage_array_for_TrajAssignedDuration_size) {
 // Based on Par. 3.2.2. Trajectory Planning for Machines and Robots
 
 	/* 
-	 *	StpTrapzProfParams = {h, Texec, Ta, StpVmax, StpAmax }: All given in SI units
+	 *	storage_array_for_TrajAssignedDuration = {h, Texec, Ta, StpVmax, StpAmax }: All given in SI units
 	 *  StpInitPos,StpGoalPosition -> [rads]
 	 *  StpVmax -> [rad/sec]
 	 *  StpAmax -> [rad/sec^2]
 	 */
 
   // Determine initial step delay time for real-time profile generation: c0 with ignored inaccuracy factor [sec]
-  float sqrt_for_c0_calc =  (2 * _ag) / StpTrapzProfParams[4] ;
+  float sqrt_for_c0_calc =  (2 * _ag) / storage_array_for_TrajAssignedDuration[storage_array_for_TrajAssignedDuration_size-1] ;
   double c0              =  0.676 * _ft * pow(10.0,-6.0) * sqrt(sqrt_for_c0_calc);							                  
   Serial.print("Initial Step Delay Time(c0)                   = "); Serial.print(c0,6);        Serial.println("  [secs] ");
 

@@ -7,7 +7,7 @@
 #include <EEPROM.h>
 #include <fstream>
 #include <vector>
-#include <printf.h>
+//#include <printf.h>
 #include "CustomStepperMetamorphicManipulator.h"
 
 using namespace std;
